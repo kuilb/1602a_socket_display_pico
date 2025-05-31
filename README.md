@@ -1,7 +1,9 @@
 # 1602a_socket_display_pico
 Fork自之前的http协议(web)控制项目，将协议改为socket来优化性能  
 使用树莓派pico WH + 1602a显示屏  
-使用arduino IDE编写
+使用arduino IDE编写  
+
+v1.0 一帧一个连接，效率低，但是先发着先
 
 ### 注意事项
 使用前请自定义WiFi ssid和密码，只支持2.4GWiFi  
