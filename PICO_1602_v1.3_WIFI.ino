@@ -1,6 +1,9 @@
 #include <WiFi.h>
 #include <map>
 #include <LiquidCrystal.h>
+#define setHigh(pin) (gpio_set_mask(1ul << (pin)))
+#define setLow(pin)  (gpio_clr_mask(1ul << (pin)))
+#define setOutput(pin) (gpio_init(pin), gpio_set_dir(pin, GPIO_OUT))
 //以下是引脚定义
 #define LCD_RS 2                    //数据/指令切换引脚
 #define LCD_E 3                     //触发引脚
@@ -33,7 +36,13 @@ char temp[35];
 int tail = 0;
 int counter=0;
 WiFiServer server(13000);              //13000端口设置服务器
-std::map<int, String> kanaMap;      //假名映射表
+//std::map<int, String> kanaMap;      //假名映射表
+
+//假名映射数组   最多支持 key = 12000 ~ 12999
+const int kanaMapBase = 12000;
+const int kanaMapSize = 1000; // 支持 key ∈ [12000, 12999]
+String kanaMap[kanaMapSize];
+
 using namespace std;
 
 void initKanaMap() {
@@ -149,74 +158,47 @@ void initKanaMap() {
 }
 
 void init(){                        //初始化引脚
-    pinMode(LCD_RS,GPIO_OUT);
-    pinMode(LCD_E,GPIO_OUT);
-    pinMode(LCD_D4,OUTPUT);
-    pinMode(LCD_D5,GPIO_OUT);
-    pinMode(LCD_D6,GPIO_OUT);
-    pinMode(LCD_D7,GPIO_OUT);
-    pinMode(LED_LIGHT,GPIO_OUT);
-    pinMode(BOTTEN,INPUT);
+    setOutput(LCD_RS);
+    setOutput(LCD_E);
+    setOutput(LCD_D4);
+    setOutput(LCD_D5);
+    setOutput(LCD_D6);
+    setOutput(LCD_D7);
+    setOutput(LED_LIGHT);
+    pinMode(BOTTEN, INPUT);
 
     analogWrite(BLA, 255);
 }
 
 void triggle_E(){                     //触发E引脚
-    delay(1);
-    digitalWrite(LCD_E,HIGH);
-    delay(1);
-    digitalWrite(LCD_E,LOW);
-    delay(1);
+    sleep_us(15);
+    setHigh(LCD_E);
+    sleep_us(15);
+    setLow(LCD_E);
+    sleep_us(15);
 }
 
 void gpio_write(int data,int mode){   //写入一个数据或指令
 
     //设定模式(指令/字符)
-    if(mode==0){
-        digitalWrite(LCD_RS,LOW);
-    }
-    else if(mode==1){
-        digitalWrite(LCD_RS,HIGH);
+    if (mode == 0) {
+        setLow(LCD_RS);
+    } else {
+        setHigh(LCD_RS);
     }
 
     //前四位
-    digitalWrite(LCD_D7,LOW);
-    digitalWrite(LCD_D6,LOW);
-    digitalWrite(LCD_D5,LOW);
-    digitalWrite(LCD_D4,LOW);
-
-    if((data &0x80) == 0x80){
-        digitalWrite(LCD_D7,HIGH);
-    }
-    if((data &0x40) == 0x40){
-        digitalWrite(LCD_D6,HIGH);
-    }
-    if((data & 0x20) == 0x20){
-        digitalWrite(LCD_D5,HIGH);
-    }
-    if((data & 0x10) == 0x10){
-        digitalWrite(LCD_D4,HIGH);
-    }
+    if (data & 0x80) setHigh(LCD_D7); else setLow(LCD_D7);
+    if (data & 0x40) setHigh(LCD_D6); else setLow(LCD_D6);
+    if (data & 0x20) setHigh(LCD_D5); else setLow(LCD_D5);
+    if (data & 0x10) setHigh(LCD_D4); else setLow(LCD_D4);
     triggle_E();
 
     //后四位
-    digitalWrite(LCD_D7,LOW);
-    digitalWrite(LCD_D6,LOW);
-    digitalWrite(LCD_D5,LOW);
-    digitalWrite(LCD_D4,LOW);
-    
-    if((data & 0x08) == 0x08){
-        digitalWrite(LCD_D7,HIGH);
-    }
-    if((data & 0x04) == 0x04){
-        digitalWrite(LCD_D6,HIGH);
-    }
-    if((data & 0x02) == 0x02){
-        digitalWrite(LCD_D5,HIGH);
-    }
-    if((data & 0x01) == 0x01){
-        digitalWrite(LCD_D4,HIGH);
-    }
+    if (data & 0x08) setHigh(LCD_D7); else setLow(LCD_D7);
+    if (data & 0x04) setHigh(LCD_D6); else setLow(LCD_D6);
+    if (data & 0x02) setHigh(LCD_D5); else setLow(LCD_D5);
+    if (data & 0x01) setHigh(LCD_D4); else setLow(LCD_D4);
     triggle_E();
 }
 
@@ -293,20 +275,8 @@ void setup() {
     IP1.concat(IP);
     lcd_text(IP1,LCD_line2);
 
-    //delay(5000);
-
     server.begin();
 }
-
-// 假名utf转换成RAW字符函数,查表
-String get_kana_ascii(int utf8){
-  String raw_kana="  ";
-  if (kanaMap.count(utf8))
-    return kanaMap[utf8];
-
-  return raw_kana;  // 默认返回空格
-}
-
 
 //设置光标位置
 void lcd_setCursor(int col, int row){
@@ -338,6 +308,12 @@ void lcd_next_cousor(){
     int row = (lcdCursor < 16) ? 0 : 1;
     int col = lcdCursor % 16;
     lcd_setCursor(col, row);
+    // Serial.print("current: ");
+    // Serial.println(lcdCursor);
+    // Serial.print("current cousor: ");
+    // Serial.print(row);
+    // Serial.print(" ");
+    // Serial.println(col);
 }
 
 // 写入一字节的自定义字符
@@ -367,6 +343,7 @@ void lcd_dis_costom(int index){
 // 显示普通字符
 void lcd_dis_chr(char text){   //显示函数
         gpio_write(int(text),CHR); //ascii直接写入
+        lcd_next_cousor();
 }
 
 // 清屏
@@ -382,9 +359,17 @@ int utf8ToUnicode(uint8_t c0, uint8_t c1, uint8_t c2) {
   return ((c0 & 0x0F) << 12) | ((c1 & 0x3F) << 6) | (c2 & 0x3F);
 }
 
+void lcd_print(String s) {
+    for (unsigned int i = 0; i < s.length(); i++) {
+        lcd_dis_chr(s[i]);
+    }
+}
+
 //自定义协议解码函数
 void prosessIncoming(String raw,unsigned int bodyLen){
-    Serial.println("prossing...");
+    Serial.print("processing start:");
+    Serial.println(millis());
+
     if (raw.length() < 3) {
         Serial.println("数据包太短，无法解析");
         return;
@@ -402,10 +387,13 @@ void prosessIncoming(String raw,unsigned int bodyLen){
         return;
     }
 
-    lcd_clear();
+    // 初始化显示
+    lcd_setCursor(0, 0);    // 回到屏幕起点
+    lcdCursor = 0;          // 重置全局光标
 
     unsigned int i = 3; // 从数据体开始
     uint8_t customCharIndex = 0; // 自定义字符编号（0~7）
+    String charBuffer = "";  // 用于批量显示普通字符
 
     while (i < bodyLen && lcdCursor < 32) {
         uint8_t flag = (uint8_t)raw[i++];
@@ -415,59 +403,45 @@ void prosessIncoming(String raw,unsigned int bodyLen){
             char c = raw[i++];
             //Serial.println(c);
             if((uint8_t)(c) != 0XE3){
-                lcd_dis_chr(c);
-                lcd_next_cousor();
+                // 普通 ASCII 字符
+                charBuffer += c;
             }
             else{
-                // 3字节假名
+                // 3字节日文假名 UTF-8 处理
+                if (i + 1 >= raw.length()) break; // 越界就退出
+
                 i+=1;
                 char c1 = raw[i];    // 字节1
                 i+=2;
                 char c2 = raw[i];    // 字节2
-                int key = utf8ToUnicode(c, c1, c2);
-                key-=12000;
+                int key = utf8ToUnicode(c, c1, c2) - 12000;
 
-                Serial.println();
-                Serial.print("c0: ");
-                Serial.print((uint8_t)c, HEX);
-                Serial.print(" c1: ");
-                Serial.print((uint8_t)c1, HEX);
-                Serial.print(" c2: ");
-                Serial.println((uint8_t)c2, HEX);
+                String kana = kanaMap[key];
+                charBuffer += kana[0];
+                //lcd_dis_chr(char(kana[0]));
 
-                Serial.println("key: " + String(key));
-
-                if (kanaMap.count(key)) {
-                    //String lcd_str = "  ";
-                    String lcd_str = get_kana_ascii(key);
-                    Serial.println("lcd_str length: " + lcd_str.length());
-
-                    lcd_dis_chr(char(lcd_str[0]));
-                    lcd_next_cousor();
-
-                    if((uint8_t)lcd_str[1] == 222){
-                        lcd_dis_chr(char(lcd_str[1]));
-                        lcd_next_cousor();
-                    }
-
-                    Serial.print("lcd_str0: ");
-                    Serial.println((uint8_t)lcd_str[0], HEX);
-                    Serial.print("lcd_str1: ");
-                    Serial.println((uint8_t)lcd_str[1], HEX);
+                if((uint8_t)kana[1] == 222){
+                    charBuffer += kana[1];
+                    //lcd_dis_chr(char(kana[1]));
                 }
-                //测试用例
-                // String test_kana="  ";
-                // test_kana = get_kana_ascii(354);
-                // Serial.println("test1: " + (uint8_t)test_kana[0]);
-                // Serial.println("test2: " + (uint8_t)test_kana[1]);
-                // Serial.println(get_kana_ascii(354));
 
                 i++;
             }
+        } 
+        else if (flag == 0x01) {
+            // 自定义字符前要刷新缓冲区
+            if (charBuffer.length() > 0) {
+                uint32_t t0_dis_char = millis();
 
-        } else if (flag == 0x01) {
-            // 自定义字符
-            if (i + 4 >= raw.length()) {
+                lcd_print(charBuffer);  // 批量输出
+                //lcdCursor += charBuffer.length(); // 更新全局光标
+                charBuffer = ""; // 清空缓冲区
+
+                Serial.print("显示buffer耗时: ");
+                Serial.println(millis() - t0_dis_char);
+            }
+
+            if (i + 7 >= raw.length()) {
                 Serial.println("自定义字符数据不足");
                 break;
             }
@@ -479,95 +453,119 @@ void prosessIncoming(String raw,unsigned int bodyLen){
             }
 
             // 写入 LCD 自定义字符 slot (0~7)
+            // uint32_t t0_write_costom = millis();
             lcd_createChar(customCharIndex, charMap);
+            // Serial.print("写入自定义字符处理耗时：");
+            // Serial.println(millis() - t0_write_costom);
 
             // 显示此自定义字符
+            // uint32_t t0_dis_costom = millis();
             lcd_dis_costom(customCharIndex);
             lcd_next_cousor();
+            // Serial.print("显示自定义字符处理耗时：");
+            // Serial.println(millis() - t0_dis_costom);
 
-            customCharIndex = (customCharIndex + 1) % 8; // 循环使用 slot
+            // 循环使用 slot
+            customCharIndex = (customCharIndex + 1) % 8;
         } else {
             Serial.print("\n未知标志: ");
             Serial.println(flag, HEX);
             break;
         }
     }
+    // 最后如果还有残留字符也要刷新输出
+    if (charBuffer.length() > 0) {
+        lcd_print(charBuffer);
+        //lcdCursor += charBuffer.length();
+    }
+
+    // 填充空格至满屏
+    while (lcdCursor < 32) {
+        lcd_dis_chr(' ');
+    }
+
+    Serial.print("prossing end:");
+    Serial.println(millis());
 }
 
-// Socket通信函数
-String handleSocketClient(){
-    // 初始化网络客户端
+void handleSocketClient(){
     WiFiClient client = server.accept();
-    if (!client) return "";
+    if (!client) return;
 
     unsigned long startTime = millis();
     String recvBuffer = "";
-    bool packetStarted = false;
 
     Serial.print("\nTime:");
     Serial.println(millis());
     Serial.println("Socket Client connected.");
 
     while (client.connected()) {
-        // 超时中断连接(2S)
         if (millis() - startTime > timeoutTime) {
-            Serial.println("Timeout, closing client.");
+            Serial.println("\nTimeout, closing client.");
             break;
         }
 
-        //等待数据
-        if(client.available() > 0){
+        if (client.available() > 0) {
             uint8_t b = client.read();
             recvBuffer += (char)b;
-            startTime = millis(); // 重置超时（接收中）
-        } else{
-            Serial.print(".");
-            delay(5);   // 等待更多字节
+            startTime = millis();  // 重置超时
+        } else {
+            delay(5);
+            continue;
         }
-                
-        // 开始解析包头
-        if (!packetStarted && recvBuffer.length() >= 2) {
+
+        // 尝试从缓冲区中解析完整包，可能存在多个包
+        while (recvBuffer.length() >= 3) {
+            static bool if_head = false;
             if ((uint8_t)recvBuffer[0] == 0xAA && (uint8_t)recvBuffer[1] == 0x55) {
-                packetStarted = true;
-                Serial.println("\nfound pack head!");
+                if(if_head == false){
+                    if_head = true;
+                    Serial.print("recived pack head: ");
+                    Serial.println(millis());
+                }
+                uint8_t bodyLen = (uint8_t)recvBuffer[2];
+                unsigned int fullLen = 3 + bodyLen;
+                if (recvBuffer.length() >= fullLen) {
+                    String fullPacket = recvBuffer.substring(0, fullLen);
+                    recvBuffer.remove(0, fullLen);
+
+                    if_head=false;
+                    Serial.print("Received full packet:");
+                    Serial.println(millis());
+                    // Serial.print("Raw bytes: ");
+                    // for (unsigned int i = 0; i < fullPacket.length(); i++) {
+                    //     Serial.print("0x");
+                    //     Serial.print((uint8_t)fullPacket[i], HEX);
+                    //     Serial.print(" ");
+                    // }
+                    Serial.println();
+
+                    Serial.println("== 开始处理 ==");
+                    uint32_t t0 = millis();
+                    prosessIncoming(fullPacket, fullLen);
+                    Serial.print("总处理耗时: ");
+                    Serial.println(millis() - t0);
+
+                    Serial.println("发送ACK\n");
+                    client.write("OK\n");
+                } else {
+                    // 等待更多数据，不跳出while循环，先break出去再继续收
+                    break;
+                }
             } else {
-                // 如果头不对，删掉第一个字节，继续寻找包头
+                // 包头错误，删除第一个字节，继续寻找
                 recvBuffer.remove(0, 1);
             }
-
-            // 简单判断是否收完：协议内有长度字段
-            if (recvBuffer.length() >= 3) {
-                uint8_t bodyLen = recvBuffer[2];  // 第三个字节是长度字段
-                if (recvBuffer.length() >= (unsigned int)(3 + bodyLen)) {
-                    break; // 收到完整包
-                }
-            }
         }
     }
 
-    Serial.print("\nRaw bytes: ");
-    for (unsigned int i=0; i<recvBuffer.length(); i++) {
-        Serial.print("0x");
-        Serial.print((uint8_t)recvBuffer[i], HEX);
-        Serial.print(" ");
-    }
-    Serial.println();
-
-    Serial.print("expectedLength: ");
-    Serial.println((unsigned int)(3 + recvBuffer[2]));
-    client.write("OK\n");
-
-    prosessIncoming(recvBuffer,(unsigned int)(3 + recvBuffer[2]));
-
-    return recvBuffer;
+    Serial.println("Client disconnected.");
 }
+
 
 String raw;
 void loop(){
     digitalWrite(LED_BUILTIN, LOW);
 
-    raw = handleSocketClient();
-    if(raw!=""){
-        // Serial.println("\nReceived: "+raw);
-    }
+    handleSocketClient();
 }
