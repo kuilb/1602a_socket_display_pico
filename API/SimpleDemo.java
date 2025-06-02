@@ -41,8 +41,7 @@ public class SimpleDemo {
             // ✅ 构建并发送数据（支持混合多个 NormalChar 和 CustomChar）
             sender.send(ProtocolBuilder.build(
                 cusArr0,
-                // NormalChar.fromString("     いじょうなし"),
-                NormalChar.fromString("ぁぃぅぇぉ"),
+                NormalChar.fromString("     いじょうなし"),
                 cusArr1
             ));
 
