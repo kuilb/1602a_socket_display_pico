@@ -2,7 +2,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ProtocolBuilder {
-    public static byte[] build(Object... inputs) {
+    public static byte[] build(int frameInterval, Object... inputs) {
     List<Byte> result = new ArrayList<>();
 
     // 协议头
@@ -10,6 +10,10 @@ public class ProtocolBuilder {
     result.add((byte) 0x55);
 
     List<Byte> body = new ArrayList<>();
+
+     // 帧率字段占2字节，高字节先发（网络序）
+    body.add((byte) ((frameInterval >> 8) & 0xFF));
+    body.add((byte) (frameInterval & 0xFF));
 
     for (Object input : inputs) {
         if (input instanceof CharPacket) {

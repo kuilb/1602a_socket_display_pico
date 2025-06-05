@@ -8,7 +8,13 @@ public class SimpleDemo {
         int port = 13000;
 
         // ✅ 初始化发送器，负责建立连接并发送数据
-        Sender sender = new Sender(ip, port);
+        PicoLink pico = new PicoLink(ip, port);
+
+        // ✅ 初始化按键监听器
+        pico.setButtonListener(buttonName -> {
+            System.out.println("收到按键事件: " + buttonName);
+            // 你要的操作
+        });
 
         // ✅ 将字符串转换为普通字符数组（支持假名、符号等）
         NormalChar[] normalchar = NormalChar.fromString("いじょうなし ");
@@ -36,20 +42,21 @@ public class SimpleDemo {
         CustomChar[] cusArr1 = CustomChar.fromByteArray(Arrays.copyOfRange(customArray, 32, 64));
 
         try {
-            sender.connect(); // 连接至 Pico
+            pico.connect(); // 连接至 Pico
 
             // ✅ 构建并发送数据（支持混合多个 NormalChar 和 CustomChar）
-            sender.send(ProtocolBuilder.build(
+            pico.send(ProtocolBuilder.build(
+                0,
                 cusArr0,
                 NormalChar.fromString("     いじょうなし"),
                 cusArr1
             ));
 
-            Thread.sleep(1000); // 可自行替换，但是要保证连接时长不能太短
+            Thread.sleep(30000); // 可自行替换，但是要保证连接时长不能太短
         } catch (IOException | InterruptedException e) {
             e.printStackTrace(); 
         } finally {
-            sender.close(); // 释放连接资源
+            pico.close(); // 释放连接资源
         }
     }
 }
